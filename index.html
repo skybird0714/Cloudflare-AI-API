@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare AI 应用</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #f48120;
+            text-align: center;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            resize: vertical;
+        }
+        button {
+            background-color: #f48120;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #e67300;
+        }
+        #response {
+            white-space: pre-wrap;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+            min-height: 100px;
+        }
+        .model-selector {
+            margin-bottom: 15px;
+        }
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            width: 100%;
+        }
+        .loading {
+            text-align: center;
+            display: none;
+        }
+        .help-text {
+            background-color: #e8f4f8;
+            border-left: 4px solid #4a90e2;
+            padding: 10px 15px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 14px;
+        }
+        .api-config {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .api-config details {
+            margin-bottom: 10px;
+        }
+        .api-config summary {
+            cursor: pointer;
+            font-weight: bold;
+            color: #333;
+        }
+        .api-config input, .api-config select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Cloudflare AI 应用</h1>
+    
+    <div class="container">
+        <div class="help-text">
+            <p><strong>使用说明：</strong></p>
+            <ul>
+                <li>文本生成：输入任何问题或指令，AI将生成相应回答</li>
+                <li>情感分析：输入一段文本，AI将分析其情感倾向</li>
+                <li>图像生成：输入详细的图像描述，AI将生成相应图像</li>
+            </ul>
+        </div>
+        
+        <div class="model-selector">
+            <label for="model">选择模型：</label>
+            <select id="model">
+                <option value="@cf/meta/llama-3.1-8b-instruct">Llama 3.1 (8B) - 文本生成</option>
+                <option value="@cf/huggingface/distilbert-sst-2-int8">DistilBERT - 情感分析</option>
+                <option value="@cf/stabilityai/stable-diffusion-xl-base-1.0">Stable Diffusion XL - 图像生成</option>
+            </select>
+        </div>
+        
+        <label for="prompt">输入提示：</label>
+        <textarea id="prompt" placeholder="输入您的问题或提示..."></textarea>
+        
+        <button id="submitBtn">提交请求</button>
+        
+        <div class="loading" id="loading">
+            <p>处理中，请稍候...</p>
+        </div>
+        
+        <div id="response"></div>
+        
+        <div class="api-config">
+            <details>
+                <summary>API 配置</summary>
+                <div>
+                    <label for="account_id">账户 ID：</label>
+                    <input type="text" id="account_id" value="改为你的account id">
+                    
+                    <label for="api_token">API 令牌：</label>
+                    <input type="text" id="api_token" value="改为你的api令牌">
+                    
+                    <label for="use_proxy">使用代理：</label>
+                    <select id="use_proxy">
+                        <option value="true">是 (推荐，解决CORS问题)</option>
+                        <option value="false">否 (直接调用API)</option>
+                    </select>
+                </div>
+            </details>
+        </div>
+    </div>
+ 
+    <footer>
+        由 Cloudflare AI API 提供支持
+    </footer>
+ 
+    <script>
+        // 根据选择的模型更新提示文本
+        document.getElementById('model').addEventListener('change', function() {
+            const model = this.value;
+            const promptElement = document.getElementById('prompt');
+            
+            if (model.includes('stable-diffusion')) {
+                promptElement.placeholder = "输入图像描述，请使用纯英文和提示标签";
+            } else if (model.includes('distilbert')) {
+                promptElement.placeholder = "输入一段文本进行情感分析，例如：这家餐厅的服务非常好，食物也很美味...";
+            } else {
+                promptElement.placeholder = "输入您的问题或指令，例如：解释量子计算的基本原理...";
+            }
+        });
+        
+        document.getElementById('submitBtn').addEventListener('click', async function() {
+            const prompt = document.getElementById('prompt').value;
+            const model = document.getElementById('model').value;
+            const responseElement = document.getElementById('response');
+            const loadingElement = document.getElementById('loading');
+            
+            // 获取API配置
+            const accountId = document.getElementById('account_id').value;
+            const apiToken = document.getElementById('api_token').value;
+            const useProxy = document.getElementById('use_proxy').value === 'true';
+            
+            if (!prompt) {
+                responseElement.innerHTML = "<div class='error'>请输入提示内容</div>";
+                return;
+            }
+            
+            if (!accountId || !apiToken) {
+                responseElement.innerHTML = "<div class='error'>请提供有效的账户ID和API令牌</div>";
+                return;
+            }
+            
+            responseElement.textContent = "";
+            loadingElement.style.display = "block";
+            
+            try {
+                // 准备请求数据
+                let requestData = {};
+                
+                if (model.includes('stable-diffusion')) {
+                    requestData = { prompt: prompt };
+                } else if (model.includes('distilbert')) {
+                    requestData = { text: prompt };
+                } else {
+                    requestData = { prompt: prompt };
+                }
+                
+                let response;
+                
+                if (useProxy) {
+                    // 使用代理
+                    response = await fetch(`proxy.php?model=${encodeURIComponent(model)}&account_id=${encodeURIComponent(accountId)}&api_token=${encodeURIComponent(apiToken)}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestData)
+                    });
+                } else {
+                    // 直接调用API
+                    response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${apiToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestData)
+                    });
+                }
+                
+                // 检查是否为图像生成模型
+                if (model.includes('stable-diffusion')) {
+                    // 克隆响应以避免多次读取同一个流
+                    const responseClone = response.clone();
+                    
+                    try {
+                        // 尝试先解析为JSON（如果是代理返回的）
+                        const data = await responseClone.json();
+                        if (data.success && data.result && data.result.images) {
+                            const imgBase64 = data.result.images[0];
+                            responseElement.innerHTML = `<img src="data:image/png;base64,${imgBase64}" alt="生成的图像" style="max-width: 100%;">`;
+                        } else {
+                            responseElement.innerHTML = `<div class='error'>图像生成失败: ${JSON.stringify(data.errors || '未知错误')}</div>`;
+                        }
+                    } catch (e) {
+                        // 如果不是JSON，则尝试作为二进制图像处理
+                        try {
+                            const imageBlob = await response.blob();
+                            const imageUrl = URL.createObjectURL(imageBlob);
+                            responseElement.innerHTML = `<img src="${imageUrl}" alt="生成的图像" style="max-width: 100%;">`;
+                        } catch (blobError) {
+                            responseElement.innerHTML = `<div class='error'>处理图像失败: ${blobError.message}</div>`;
+                        }
+                    }
+                    loadingElement.style.display = "none";
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (model.includes('distilbert')) {
+                        // 处理情感分析响应
+                        const sentiment = data.result.classifications[0];
+                        const isPositive = sentiment.label === "POSITIVE";
+                        const confidencePercent = (sentiment.confidence * 100).toFixed(2);
+                        
+                        responseElement.innerHTML = `
+                            <p><strong>情感分析结果：</strong> ${isPositive ? '积极 😊' : '消极 😞'}</p>
+                            <p><strong>置信度：</strong> ${confidencePercent}%</p>
+                            <p><strong>原始数据：</strong></p>
+                            <pre>${JSON.stringify(data.result, null, 2)}</pre>
+                        `;
+                    } else {
+                        // 处理文本生成响应
+                        responseElement.textContent = data.result.response;
+                    }
+                } else {
+                    responseElement.innerHTML = `<div class='error'>错误: ${JSON.stringify(data.errors)}</div>`;
+                }
+            } catch (error) {
+                responseElement.innerHTML = `<div class='error'>请求错误: ${error.message}</div>`;
+            } finally {
+                loadingElement.style.display = "none";
+            }
+        });
+        
+        // 初始化时触发一次模型变更事件，设置正确的提示文本
+        document.getElementById('model').dispatchEvent(new Event('change'));
+    </script>
+</body>
+</html> 
+
+
+ref(APA): tkttn0714.天空天堂鸟的博客.https://071400.xyz. Retrieved 2025/6/14.
